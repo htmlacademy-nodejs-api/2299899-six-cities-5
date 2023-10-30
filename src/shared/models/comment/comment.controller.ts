@@ -5,8 +5,8 @@ import { Logger } from 'pino';
 
 import { fillDTO } from '../../helpers/index.js';
 import {
-  BaseController, DocumentExistsMiddleware, HttpError, HttpMethod, ValidateDtoMiddleware,
-  ValidateObjectIdMiddleware
+  BaseController, DocumentExistsMiddleware, HttpError, HttpMethod, PrivateRouteMiddleware,
+  ValidateDtoMiddleware, ValidateObjectIdMiddleware
 } from '../../libs/rest/index.js';
 import { Service } from '../../types/index.js';
 import { ParamOfferId } from '../offer/index.js';
@@ -31,6 +31,7 @@ export default class CommentController extends BaseController {
       HttpMethod.Post,
       handler: this.create,
       middlewares: [
+        new PrivateRouteMiddleware(),
         new ValidateDtoMiddleware(CreateCommentDto),
       ],
     });
@@ -46,7 +47,7 @@ export default class CommentController extends BaseController {
   }
 
   public async create(
-    { body }: CreateCommentRequest,
+    { body, tokenPayload }: CreateCommentRequest,
     res: Response
   ): Promise<void> {
     if (!await this.offerService.exists(body.offerId)) {
@@ -57,7 +58,10 @@ export default class CommentController extends BaseController {
       );
     }
 
-    const comment = await this.commentService.create(body);
+    const comment = await this.commentService.create({
+      ...body,
+      authorId: tokenPayload.id,
+    });
     this.created(res, fillDTO(CommentRdo, comment));
   }
 
