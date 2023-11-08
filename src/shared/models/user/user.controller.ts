@@ -1,19 +1,21 @@
 import { Request, Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
 import { inject, injectable } from 'inversify';
+import { Types } from 'mongoose';
 
 import { fillDTO } from '../../helpers/common.js';
 import { Config, RestSchema } from '../../libs/config/index.js';
 import { Logger } from '../../libs/logger/index.js';
 import {
-  BaseController, HttpError, HttpMethod, UploadFileMiddleware, ValidateDtoMiddleware,
-  ValidateObjectIdMiddleware
+  BaseController, HttpError, HttpMethod, IsAnonymusMiddleware, PrivateRouteMiddleware,
+  UploadFileMiddleware, ValidateDtoMiddleware, ValidateObjectIdMiddleware
 } from '../../libs/rest/index.js';
 import { Service } from '../../types/index.js';
 import { AuthService } from '../auth/index.js';
+import { ALLOWED_IMAGE_MIME_TYPES } from '../offer/offer.const.js';
 import { CreateUserDto } from './dto/create-user.dto.js';
 import { LoginUserDto } from './dto/login-user.dto.js';
-import { LoggedUserRdo } from './index.js';
+import { LoggedUserRdo, UploadUserAvatarRdo } from './index.js';
 import { UserService } from './interface/user-service.interface.js';
 import { UserRdo } from './rdo/user.rdo.js';
 import { CreateUserRequest } from './types/create-user-request.type.js';
@@ -35,6 +37,7 @@ export class UserController extends BaseController {
       method: HttpMethod.Post,
       handler: this.create,
       middlewares: [
+        new IsAnonymusMiddleware(),
         new ValidateDtoMiddleware(CreateUserDto),
       ],
     });
@@ -47,18 +50,19 @@ export class UserController extends BaseController {
       ],
     });
     this.addRoute({
+      path: '/login',
+      method: HttpMethod.Get,
+      handler: this.checkAuthenticate,
+    });
+    this.addRoute({
       path: '/:userId/avatar',
       method: HttpMethod.Post,
       handler: this.uploadAvatar,
       middlewares: [
+        new PrivateRouteMiddleware(),
         new ValidateObjectIdMiddleware('userId'),
-        new UploadFileMiddleware(this.config.get('UPLOAD_DIRECTORY'), 'avatar'),
+        new UploadFileMiddleware(this.config.get('UPLOAD_DIRECTORY'), 'avatar', ALLOWED_IMAGE_MIME_TYPES),
       ]
-    });
-    this.addRoute({
-      path: '/login',
-      method: HttpMethod.Get,
-      handler: this.checkAuthenticate,
     });
   }
 
@@ -79,18 +83,15 @@ export class UserController extends BaseController {
   public async login({ body }: LoginUserRequest, res: Response): Promise<void> {
     const user = await this.authService.verify(body);
     const token = await this.authService.authenticate(user);
-    const responseData = fillDTO(LoggedUserRdo, {
-      token,
-      email: user.email,
-      id: user.id,
-    });
-    this.ok(res, responseData);
+    const responseData = fillDTO(LoggedUserRdo, user);
+    this.ok(res, Object.assign(responseData, { token }));
   }
 
-  public async uploadAvatar(req: Request, res: Response) {
-    this.created(res, {
-      filepath: req.file?.path
-    });
+  public async uploadAvatar({ params, file }: Request, res: Response) {
+    const { userId } = params;
+    const uploadFile = { avatar: file?.filename };
+    await this.userService.updateById(new Types.ObjectId(userId), uploadFile);
+    this.created(res, fillDTO(UploadUserAvatarRdo, { filepath: uploadFile.avatar }));
   }
 
   public async checkAuthenticate({ tokenPayload: { email } }: Request, res: Response) {

@@ -1,15 +1,19 @@
 import { inject, injectable } from 'inversify';
-import { Types } from 'mongoose';
 
-import { defaultClasses, DocumentType, types } from '@typegoose/typegoose';
+import { DocumentType, types } from '@typegoose/typegoose';
+import { Base, TimeStamps } from '@typegoose/typegoose/lib/defaultClasses.js';
 
 import { CITIES } from '../../const/cities.js';
 import { Logger } from '../../libs/logger/index.js';
 import { Service, SortType } from '../../types/index.js';
 import { CreateOfferDto } from './dto/create-offer.dto.js';
 import { UpdateOfferDto } from './dto/update-offer.dto.js';
+import { OfferFindOneQuery } from './index.js';
 import { OfferFindManyQuery } from './interface/offer-find-many-query.interface.js';
 import { OfferService } from './interface/offer-service.interface.js';
+import {
+  authorPipeline, commentsPipeline, getUserPipeline, mainOffersPipeline
+} from './offer.aggregation.js';
 import { MAX_OFFERS_COUNT } from './offer.const.js';
 import { OfferEntity } from './offer.entity.js';
 
@@ -40,15 +44,12 @@ export class DefaultOfferService implements OfferService {
       .exec();
   }
 
-  public async findOne(params: Partial<defaultClasses.Base<Types.ObjectId>>): Promise<DocumentType<OfferEntity> | null> {
-    return this.offerModel
-      .findOne(params)
-      .populate(['authorId'])
-      .exec();
+  public async findOne({ params, userId }: OfferFindOneQuery): Promise<DocumentType<OfferEntity> | null> {
+    return this.findMany({ params, limit: 1, userId }).then((array) => array ? array[0] : null);
   }
 
-  public async findOneOrCreate(params: Partial<defaultClasses.Base<Types.ObjectId>>, dto: CreateOfferDto): Promise<DocumentType<OfferEntity>> {
-    const existedOffer = await this.findOne(params);
+  public async findOneOrCreate(params: Partial<Base | TimeStamps>, dto: CreateOfferDto): Promise<DocumentType<OfferEntity>> {
+    const existedOffer = await this.findOne({ params });
     if (existedOffer) {
       return existedOffer;
     }
@@ -57,47 +58,30 @@ export class DefaultOfferService implements OfferService {
 
   public async findMany({
     params = {},
+    userId,
     limit = MAX_OFFERS_COUNT,
+    favorites = false,
     sortOptions = {
       field: 'createdAt',
       order: SortType.DOWN,
     }
   }: OfferFindManyQuery): Promise<DocumentType<OfferEntity>[] | null> {
+    const userPipeline = userId ? getUserPipeline(userId) : [];
+    const favoritesPipeline = favorites ? [{ $match: { $expr: { $in: ['$_id', '$user.favorites'] } } }] : [];
+    const limitPipeline = userId ? [] : [{ $limit: limit }];
     return this.offerModel
       .aggregate([
         { $match: params },
-        {
-          $lookup: {
-            from: 'comments',
-            localField: '_id',
-            foreignField: 'offerId',
-            as: 'comments',
-          },
-        },
-        {
-          $addFields: {
-            id: { $toString: '$_id' },
-            commentsCount: { $size: '$comments' },
-            rating: {
-              $divide: [
-                {
-                  $reduce: {
-                    input: '$comments',
-                    initialValue: 0,
-                    in: { $add: ['$$value', '$$this.rating'] },
-                  },
-                },
-                {
-                  $cond: [{ $ne: [{ $size: '$comments' }, 0] }, { $size: '$comments' }, 1],
-                },
-              ],
-            },
-          },
-        },
+        ...commentsPipeline,
+        ...userPipeline,
+        ...authorPipeline,
+        ...mainOffersPipeline,
+        ...favoritesPipeline,
         { $unset: 'comments' },
-        { $limit: limit },
+        ...limitPipeline,
         { $sort: { [sortOptions.field]: sortOptions.order } },
-      ]).exec();
+      ])
+      .exec();
   }
 
   public async exists(id: string): Promise<boolean> {
