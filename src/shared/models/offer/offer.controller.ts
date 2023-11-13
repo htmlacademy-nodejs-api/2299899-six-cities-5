@@ -114,6 +114,7 @@ export class OfferController extends BaseController {
         new PrivateRouteMiddleware(),
         new ValidateObjectIdMiddleware('offerId'),
         new OfferExistsMiddleware(this.offerService, 'offerId'),
+        new ConfirmAuthorMiddleware(this.offerService, 'offerId'),
         new UploadFileMiddleware(this.configService.get('UPLOAD_DIRECTORY'), 'images', ALLOWED_IMAGE_MIME_TYPES),
       ],
     });

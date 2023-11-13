@@ -39,8 +39,26 @@ paths:
               schema:
                 $ref: '#/components/schemas/user'
 
+        '400':
+          description: Предоставленная информация не прошла валидацию.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/validationError'
+
+        '403':
+          description: Авторизованный пользователь не может зарегистрироваться повторно.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/commonError'
+
         '409':
           description: Пользователь с таким email уже существует.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/commonError'
 
   /users/login:
     post:
@@ -65,8 +83,26 @@ paths:
               schema:
                 $ref: '#/components/schemas/user'
 
+        '400':
+          description: Предоставленная информация не прошла валидацию.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/validationError'
+
+        '401':
+          description: Пользователь не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/commonError'
+
         '404':
           description: Пользователь не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/commonError'
 
     get:
       tags:
@@ -84,6 +120,10 @@ paths:
 
         '400':
           description: Неверный токен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/validationError'
 
         '401':
           description: Пользователь не авторизован. Ошибка доступа.
@@ -92,16 +132,44 @@ paths:
               schema:
                 $ref: '#/components/schemas/errorAuth'
 
-  /users/logout:
-    delete:
+  /{userId}/avatar:
+    post:
       tags:
         - users
-      summary: Завершение сеанса пользователя
-      description: Завершение сеанса пользователя - выход из закрытой части приложения
+      summary: Загрузка аватара
+      description: Загрузка изображения аватара пользователя
+
+      requestBody:
+        description: Файл изображения.
+        content:
+          image/jpg:
+            schema:
+                type: string
 
       responses:
-        '204':
-          description: Сеанс завершен
+        '201':
+          description: Аватар успешно загружен
+
+        '400':
+          description: Предоставленная информация не прошла валидацию.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/validationError'
+
+        '401':
+          description: Пользователь не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/commonError'
+
+        '404':
+          description: Пользователь не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/commonError'
 
   /offers:
     get:
@@ -146,7 +214,44 @@ paths:
                 $ref: '#/components/schemas/offer'
 
         '400':
-          description: Неверный запрос. Ошибки валидации
+          description: Предоставленная информация не прошла валидацию.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/validationError'
+
+        '401':
+          description: Пользователь не авторизован. Ошибка доступа.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorAuth'
+
+  /favorites:
+    get:
+      tags:
+        - offers
+      summary: Список избранных предложений
+      description: Возвращает список избранных предложений авторизованного пользователя.
+      security:
+        - BearerAuth: []
+
+      responses:
+        '200':
+          description: Массив предложений
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/offer'
+
+        '401':
+          description: Пользователь не авторизован. Ошибка доступа.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorAuth'
 
   /offers/{offerId}:
     get:
@@ -180,7 +285,7 @@ paths:
                 type: object
                 $ref: '#/components/schemas/errorNotFound'
 
-    put:
+    patch:
       tags:
         - offers
       summary:  Изменение информации о предложении
@@ -205,6 +310,20 @@ paths:
                 type: object
                 $ref: '#/components/schemas/offer'
 
+        '400':
+          description: Предоставленная информация не прошла валидацию.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/validationError'
+
+        '401':
+          description: Пользователь не авторизован. Ошибка доступа.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorAuth'
+
         '404':
           description: Предложение с offerId не найдено
           content:
@@ -225,80 +344,120 @@ paths:
         '204':
           description: Предложение удалено
 
-        '400':
-          description: Неверный запрос. Ошибка авторизации
-
-        '404':
-          description: Предложение с offerId не найдено
-          content:
-            application/json:
-              schema:
-                type: object
-                $ref: '#/components/schemas/errorNotFound'
-
-  /offers/{offerId}/nearby:
-    get:
-      tags:
-        - offers
-      summary: Список предложений неподалеку
-      description: Возвращает список предложений неподалеку - в текущем городе.
-
-      parameters:
-        - in: path
-          name: offerId
-          description: ID предложения
-          schema:
-            type: string
-          required: true
-
-      responses:
-        '200':
-          description: Массив предложений
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/offer'
-
-        '404':
-          description: Предложение с offerId не найдено
-          content:
-            application/json:
-              schema:
-                type: object
-                $ref: '#/components/schemas/errorNotFound'
-
-  /favorite:
-    get:
-      tags:
-        - offers
-      summary: Список избранных предложений
-      description: Возвращает список избранных предложений авторизованного пользователя.
-
-      responses:
-        '200':
-          description: Массив предложений
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/offer'
-
         '401':
           description: Пользователь не авторизован. Ошибка доступа.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/errorAuth'
+        '404':
+          description: Предложение с offerId не найдено
+          content:
+            application/json:
+              schema:
+                type: object
+                $ref: '#/components/schemas/errorNotFound'
 
-  /favorite/{offerId}/{status}:
+  /offers/{offerId}/preview:
     post:
       tags:
         - offers
-      summary:  Изменение информации о предложении
-      description: Изменение информации о предложении. Возвращает новый объект предложения.
+      summary: Загрузка превью предложения
+      description: Загрузка преыью изображения предложения
+
+      requestBody:
+        description: Файл изображения.
+        content:
+          image/jpg:
+            schema:
+                type: string
+
+      responses:
+        '201':
+          description: Изображение успешно загружено
+
+        '400':
+          description: Предоставленная информация не прошла валидацию.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/validationError'
+
+        '401':
+          description: Пользователь не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/commonError'
+
+        '403':
+          description: Предложени не принадлежит пользователю
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/commonError'
+
+        '404':
+          description: Предложение не найдено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/commonError'
+
+  /offers/{offerId}/images:
+    post:
+      tags:
+        - offers
+      summary: Загрузка изображений предложения
+      description: Загрузка массива из 6-ти изображений предложения
+
+      requestBody:
+        description: Файлы изображения.
+        content:
+          image/jpg:
+            schema:
+                type: array
+
+      responses:
+        '201':
+          description: Изображения успешно загружены
+
+        '400':
+          description: Предоставленная информация не прошла валидацию.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/validationError'
+
+        '401':
+          description: Пользователь не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/commonError'
+
+        '403':
+          description: Предложени не принадлежит пользователю
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/commonError'
+
+        '404':
+          description: Предложение не найдено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/commonError'
+
+  /{offerId}/favorite:
+    post:
+      tags:
+        - offers
+      summary:  Добавление/удаление в/из избранное
+      description: Добавление/удаление предложения в/из избранного пользователя
+      security:
+        - BearerAuth: []
 
       parameters:
         - in: path
@@ -323,6 +482,13 @@ paths:
                 type: object
                 $ref: '#/components/schemas/offer'
 
+        '400':
+          description: Предоставленная информация не прошла валидацию.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/validationError'
+
         '401':
           description: Пользователь не авторизован. Ошибка доступа.
           content:
@@ -337,6 +503,7 @@ paths:
               schema:
                 type: object
                 $ref: '#/components/schemas/errorNotFound'
+
 
   /comments/{offerId}:
     get:
@@ -363,6 +530,13 @@ paths:
                 items:
                   $ref: '#/components/schemas/comment'
 
+        '400':
+          description: Предоставленная информация не прошла валидацию.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/validationError'
+
         '404':
           description: Предложение с offerId не найдено
           content:
@@ -376,6 +550,8 @@ paths:
         - comments
       summary: Добавление нового комментария
       description: Добавление нового комментария. Возврат обеъкта комментария
+      security:
+        - BearerAuth: []
 
       parameters:
         - in: path
@@ -394,6 +570,20 @@ paths:
                 type: object
                 $ref: '#/components/schemas/commentCreation'
 
+        '400':
+          description: Предоставленная информация не прошла валидацию.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/validationError'
+
+        '401':
+          description: Пользователь не авторизован. Ошибка доступа.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorAuth'
+
         '404':
           description: Предложение с offerId не найдено
           content:
@@ -410,6 +600,39 @@ components:
       scheme: bearer
 
   schemas:
+    commonError:
+        type: object
+        properties:
+          error:
+            type: string
+            example: Offer with id 1234 not found.
+          errorType:
+            type: string
+            example: COMMON_ERROR
+
+    validationError:
+      type: object
+      properties:
+        error:
+          type: string
+          example: Validation error
+        errorType:
+          type: string
+          example: VALIDATION_ERROR
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              property:
+                type: string
+                example: price
+              messages:
+                type: array
+                items:
+                  type: string
+                  example: Minimum price is 100
+
     userCreation:
       type: object
       properties:
